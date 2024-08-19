@@ -39,9 +39,18 @@ jobs:
           images: |
             ${{env.REGISTRY}}/${{env.IMAGE_NAME}}
           tags: |
-            type=raw,value=latest,enable={{is_default_branch}}
-            type=schedule,enable=true,pattern=nightly
-            type=schedule,enable=true,pattern={{date 'YYYY-MM-DD'}}
+            type=schedule
+            type=ref,event=branch
+            type=ref,event=pr
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=semver,pattern={{major}}
+            type=sha
+          labels: |
+            maintainer=esize
+            org.opencontainers.image.title=Canvas LMS
+            org.opencontainers.image.description=Nightly build of the Canvas LMS repo
+            org.opencontainers.image.vendor=esize
 
       - name: Build and push Docker image
         id: push
@@ -51,10 +60,3 @@ jobs:
           push: true
           tags: ${{steps.meta.outputs.tags}}
           labels: ${{steps.meta.outputs.labels}}
-
-      - name: Generate artifact attestation
-        uses: actions/attest-build-provenance@v1
-        with:
-          subject-name: ${{env.REGISTRY}}/${{env.IMAGE_NAME}}
-          subject-digest: ${{steps.push.outputs.digest}}
-          push-to-registry: true
