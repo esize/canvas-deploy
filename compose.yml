@@ -1,0 +1,73 @@
+services:
+  db:
+    image: postgres
+    env_file:
+      - .env
+    volumes:
+      - ./.data/postgres:/var/lib/postgresql/data
+    networks:
+      internal:
+
+  redis:
+    image: redis:alpine
+    command: redis-server --appendonly yes
+    volumes:
+      - ./.data/redis:/data
+
+  mail:
+    image: mailhog/mailhog
+    networks:
+      internal:
+
+  app: &app
+    image: ghcr.io/esize/canvas-deploy
+    env_file:
+      - .env
+    command: bash -c "./wait-for-it.sh -t 40 db:5432 && /usr/src/entrypoint"
+    networks:
+      internal:
+        aliases:
+          - app
+      traefik:
+    volumes:
+      - ./config/cache_store.yml:/usr/src/app/config/cache_store.yml:ro
+      - ./config/cassandra.yml:/usr/src/app/config/cassandra.yml:ro
+      - ./config/consul.yml:/usr/src/app/config/consul.yml:ro
+      - ./config/database.yml:/usr/src/app/config/database.yml:ro
+      - ./config/delayed_job.yml:/usr/src/app/config/delayed_job.yml:ro
+      - ./config/domain.yml:/usr/src/app/config/domain.yml:ro
+      - ./config/dynamic_settings.yml:/usr/src/app/config/dynamic_settings.yml:ro
+      - ./config/outgoing_mail.yml:/usr/src/app/config/outgoing_mail.yml:ro
+      - ./config/redis.yml:/usr/src/app/config/redis.yml:ro
+      - ./config/security.yml:/usr/src/app/config/security.yml:ro
+      - ./config/selenium.yml:/usr/src/app/config/selenium.yml:ro
+      - ./config/vault.yml:/usr/src/app/config/vault.yml:ro
+
+      # override config settings
+      - ./config/development-local.rb:/usr/src/app/config/environments/development-local.rb:ro
+
+      # persistence
+      - ./.data/public/dist/brandable_css:/usr/src/app/public/dist/brandable_css
+      - ./.data/tmp:/usr/src/app/tmp
+
+      # wait for it script
+      - ./wait-for-it.sh:/usr/src/app/wait-for-it.sh:ro
+    depends_on:
+      - db
+      - redis
+      - mail
+    ports:
+      - 8900:8900
+
+  worker:
+    <<: *app
+    command: bundle exec script/delayed_job run
+    ports: []
+    networks:
+      internal:
+
+networks:
+  internal:
+    external: false
+  traefik:
+    external: true
